@@ -4,7 +4,7 @@ import { StatusBar, StyleSheet, Text, View } from 'react-native';
 export default function SplashScreen({ navigation }) {
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigation.replace('CategoryScreen');
+      navigation.replace('DivisionScreen');
     }, 2000);
 
     return () => clearTimeout(timer);
@@ -17,7 +17,7 @@ export default function SplashScreen({ navigation }) {
         <Text style={styles.iconText}>⚡</Text>
       </View>
       <Text style={styles.title}>LocalUnit</Text>
-      <Text style={styles.subtitle}>Smart MESCOM Bill &amp; Usage Tracker</Text>
+      <Text style={styles.subtitle}>Smart Karnataka Electricity Bill &amp; Usage Tracker</Text>
       <View style={styles.accent} />
     </View>
   );

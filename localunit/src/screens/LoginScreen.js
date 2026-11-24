@@ -11,14 +11,18 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import PrimaryButton from '../components/PrimaryButton';
+import DivisionHeader from '../components/DivisionHeader';
+import { getAccountsForDivision } from '../data/accountStorage';
+import { getEscomDivision } from '../data/escomDivisions';
 
 const errorMessage = (error) =>
   error instanceof Error ? error.message : 'Please try again.';
 
 export default function LoginScreen({ navigation, route }) {
   const category = route.params?.category;
+  const divisionCode = route.params?.divisionCode;
+  const division = getEscomDivision(divisionCode);
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -28,18 +32,19 @@ export default function LoginScreen({ navigation, route }) {
     navigation.replace('DashboardScreen', {
       userId: accountId,
       category,
+      divisionCode,
       ownerName,
     });
   };
 
   const handleLogin = async () => {
     const normalizedUserId = userId.trim();
-    if (!category) {
-      Alert.alert('Choose a category', 'Go back and select Domestic or Commercial.');
+    if (!category || !division) {
+      Alert.alert('Choose your service', 'Select an ESCOM division and account category first.');
       return;
     }
     if (!normalizedUserId || !password) {
-      Alert.alert('Missing details', 'Enter your MESCOM User ID and password.');
+      Alert.alert('Missing details', `Enter your ${division.code} User ID and password.`);
       return;
     }
 
@@ -50,14 +55,11 @@ export default function LoginScreen({ navigation, route }) {
         return;
       }
 
-      const savedAccounts = await AsyncStorage.getItem('users');
-      const accounts = savedAccounts ? JSON.parse(savedAccounts) : [];
-      if (!Array.isArray(accounts)) {
-        throw new Error('Saved account data is invalid. Please register again.');
-      }
+      const accounts = await getAccountsForDivision(division.code);
 
       const account = accounts.find(
         (savedAccount) =>
+          savedAccount.divisionCode === division.code &&
           savedAccount.userId?.toLowerCase() === normalizedUserId.toLowerCase() &&
           savedAccount.password === password,
       );
@@ -92,21 +94,24 @@ export default function LoginScreen({ navigation, route }) {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backText}>‹  Change category</Text>
-          </Pressable>
+          <DivisionHeader
+            category={category}
+            division={division}
+            onChangeDivision={() =>
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'DivisionScreen' }],
+              })
+            }
+          />
 
           <View style={styles.heading}>
             <Text style={styles.kicker}>WELCOME BACK</Text>
             <Text style={styles.title}>Sign in to{'\n'}LocalUnit</Text>
-            <View style={styles.categoryBadge}>
-              <View style={styles.badgeDot} />
-              <Text style={styles.categoryText}>{category || 'No category selected'}</Text>
-            </View>
           </View>
 
           <View style={styles.form}>
-            <Text style={styles.label}>MESCOM User ID</Text>
+            <Text style={styles.label}>{division?.code || 'ESCOM'} User ID</Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
@@ -152,10 +157,14 @@ export default function LoginScreen({ navigation, route }) {
           </View>
 
           <View style={styles.registerRow}>
-            <Text style={styles.registerPrompt}>No account created in MESCOM yet?</Text>
+            <Text style={styles.registerPrompt}>
+              No account created in {division?.code || 'ESCOM'} yet?
+            </Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => navigation.navigate('RegisterScreen', { category })}
+              onPress={() =>
+                navigation.navigate('RegisterScreen', { category, divisionCode })
+              }
             >
               <Text style={styles.registerLink}>Register here</Text>
             </Pressable>
@@ -180,16 +189,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 20,
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingRight: 12,
-  },
-  backText: {
-    color: '#426587',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   heading: {
     marginTop: 20,
     marginBottom: 28,
@@ -206,28 +205,6 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '800',
     lineHeight: 42,
-  },
-  categoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginTop: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#e1f4f7',
-  },
-  badgeDot: {
-    width: 7,
-    height: 7,
-    marginRight: 7,
-    borderRadius: 4,
-    backgroundColor: '#10aabd',
-  },
-  categoryText: {
-    color: '#126b81',
-    fontSize: 12,
-    fontWeight: '700',
   },
   form: {
     padding: 20,

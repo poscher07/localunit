@@ -3,7 +3,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -11,14 +10,18 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import PrimaryButton from '../components/PrimaryButton';
+import DivisionHeader from '../components/DivisionHeader';
+import { getAccountsForDivision, saveAccountsForDivision } from '../data/accountStorage';
+import { getEscomDivision } from '../data/escomDivisions';
 
 const errorMessage = (error) =>
   error instanceof Error ? error.message : 'Please try again.';
 
 export default function RegisterScreen({ navigation, route }) {
   const category = route.params?.category;
+  const divisionCode = route.params?.divisionCode;
+  const division = getEscomDivision(divisionCode);
   const [fullName, setFullName] = useState('');
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
@@ -28,24 +31,25 @@ export default function RegisterScreen({ navigation, route }) {
     const name = fullName.trim();
     const accountId = userId.trim();
     if (!name || !accountId || !password) {
-      Alert.alert('Missing details', 'Complete your name, MESCOM User ID, and password.');
+      Alert.alert(
+        'Missing details',
+        `Complete your name, ${division?.code || 'ESCOM'} User ID, and password.`,
+      );
       return;
     }
-    if (!category) {
-      Alert.alert('Choose a category', 'Go back and select Domestic or Commercial.');
+    if (!category || !division) {
+      Alert.alert('Choose your service', 'Select an ESCOM division and account category first.');
       return;
     }
 
     setSaving(true);
     try {
-      const savedAccounts = await AsyncStorage.getItem('users');
-      const accounts = savedAccounts ? JSON.parse(savedAccounts) : [];
-      if (!Array.isArray(accounts)) {
-        throw new Error('Saved account data is invalid.');
-      }
+      const accounts = await getAccountsForDivision(division.code);
 
       const duplicate = accounts.some(
-        (account) => account.userId?.toLowerCase() === accountId.toLowerCase(),
+        (account) =>
+          account.divisionCode === division.code &&
+          account.userId?.toLowerCase() === accountId.toLowerCase(),
       );
       if (duplicate) {
         Alert.alert('Account already exists', 'Use your existing account or choose another ID.');
@@ -58,12 +62,17 @@ export default function RegisterScreen({ navigation, route }) {
         userId: accountId,
         password,
         category,
+        divisionCode: division.code,
       });
-      await AsyncStorage.setItem('users', JSON.stringify(accounts));
+      await saveAccountsForDivision(division.code, accounts);
       Alert.alert(
         'Account created',
         'Your account is saved on this device. You can now sign in.',
-        [{ text: 'Continue', onPress: () => navigation.navigate('LoginScreen', { category }) }],
+        [{
+          text: 'Continue',
+          onPress: () =>
+            navigation.navigate('LoginScreen', { category, divisionCode }),
+        }],
       );
     } catch (error) {
       Alert.alert('Could not create account', errorMessage(error));
@@ -82,14 +91,21 @@ export default function RegisterScreen({ navigation, route }) {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backText}>‹  Back to login</Text>
-          </Pressable>
+          <DivisionHeader
+            category={category}
+            division={division}
+            onChangeDivision={() =>
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'DivisionScreen' }],
+              })
+            }
+          />
 
           <Text style={styles.kicker}>GET STARTED</Text>
           <Text style={styles.title}>Create your{'\n'}LocalUnit account</Text>
           <Text style={styles.description}>
-            Set up a local profile for your {category || 'MESCOM'} connection.
+            Set up a local profile for your {division?.code || 'ESCOM'} connection.
           </Text>
 
           <View style={styles.form}>
@@ -103,7 +119,7 @@ export default function RegisterScreen({ navigation, route }) {
               value={fullName}
             />
 
-            <Text style={styles.label}>MESCOM User ID</Text>
+            <Text style={styles.label}>{division?.code || 'ESCOM'} User ID</Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
@@ -154,17 +170,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
     paddingVertical: 20,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 26,
-    paddingVertical: 10,
-    paddingRight: 12,
-  },
-  backText: {
-    color: '#426587',
-    fontSize: 14,
-    fontWeight: '600',
   },
   kicker: {
     color: '#16849d',

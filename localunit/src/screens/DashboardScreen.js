@@ -10,14 +10,17 @@ import {
   View,
 } from 'react-native';
 import PrimaryButton from '../components/PrimaryButton';
-import { fetchMESCOMData } from '../data/mescomService';
+import { fetchESCOMData } from '../data/escomService';
+import { getEscomDivision } from '../data/escomDivisions';
 
 const getErrorMessage = (error) =>
-  error instanceof Error ? error.message : 'Unable to load MESCOM data.';
+  error instanceof Error ? error.message : 'Unable to load ESCOM data.';
 
 export default function DashboardScreen({ navigation, route }) {
   const userId = route.params?.userId;
   const category = route.params?.category;
+  const divisionCode = route.params?.divisionCode;
+  const division = getEscomDivision(divisionCode);
   const ownerName = route.params?.ownerName;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +34,7 @@ export default function DashboardScreen({ navigation, route }) {
       setLoading(true);
       setError(null);
       try {
-        const result = await fetchMESCOMData(userId, category, ownerName);
+        const result = await fetchESCOMData(userId, category, divisionCode, ownerName);
         if (isActive) {
           setData(result);
         }
@@ -50,15 +53,18 @@ export default function DashboardScreen({ navigation, route }) {
     return () => {
       isActive = false;
     };
-  }, [category, ownerName, userId]);
+  }, [category, divisionCode, ownerName, userId]);
 
   const refreshData = async () => {
     setRefreshing(true);
     try {
-      const result = await fetchMESCOMData(userId, category, ownerName);
+      const result = await fetchESCOMData(userId, category, divisionCode, ownerName);
       setData(result);
       setError(null);
-      Alert.alert('Updated', 'Your simulated MESCOM data has been refreshed.');
+      Alert.alert(
+        'Updated',
+        `Your simulated ${division?.code || 'ESCOM'} data has been refreshed.`,
+      );
     } catch (requestError) {
       Alert.alert('Refresh failed', getErrorMessage(requestError));
     } finally {
@@ -69,7 +75,7 @@ export default function DashboardScreen({ navigation, route }) {
   const logOut = () => {
     navigation.reset({
       index: 0,
-      routes: [{ name: 'CategoryScreen' }],
+      routes: [{ name: 'DivisionScreen' }],
     });
   };
 
@@ -78,7 +84,9 @@ export default function DashboardScreen({ navigation, route }) {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loading}>
           <ActivityIndicator color="#16a8bb" size="large" />
-          <Text style={styles.loadingText}>Fetching live MESCOM server data...</Text>
+          <Text style={styles.loadingText}>
+            Fetching live {division?.code || 'ESCOM'} server data...
+          </Text>
           <Text style={styles.loadingHint}>This demo uses simulated account data</Text>
         </View>
       </SafeAreaView>
@@ -89,7 +97,7 @@ export default function DashboardScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.errorState}>
-          <Text style={styles.errorTitle}>We couldn't load this account</Text>
+          <Text style={styles.errorTitle}>We could not load this account</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <PrimaryButton label="Back to sign in" onPress={logOut} />
         </View>
@@ -103,9 +111,33 @@ export default function DashboardScreen({ navigation, route }) {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.topBar}>
-          <View>
-            <Text style={styles.topKicker}>LOCALUNIT</Text>
+          <View style={styles.divisionInfo}>
+            <View
+              style={[
+                styles.divisionBadge,
+                { backgroundColor: `${data.division.accentColor}18` },
+              ]}
+            >
+              <View
+                style={[
+                  styles.divisionDot,
+                  { backgroundColor: data.division.accentColor },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.topKicker,
+                  { color: data.division.accentColor },
+                ]}
+              >
+                {data.division.code} · {category}
+              </Text>
+            </View>
             <Text style={styles.topTitle}>Energy overview</Text>
+            <Text style={styles.divisionName}>{data.division.name}</Text>
+            <Text style={styles.districtsSubtitle}>
+              Serving {data.division.districts.join(', ')}
+            </Text>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -133,7 +165,7 @@ export default function DashboardScreen({ navigation, route }) {
 
         <View style={styles.demoNotice}>
           <Text style={styles.demoNoticeText}>
-            Sample data only · Not connected to MESCOM
+            Sample data only · Not connected to {data.division.code}
           </Text>
         </View>
 
@@ -172,7 +204,12 @@ export default function DashboardScreen({ navigation, route }) {
                 <View key={`${item.month}-${item.kWh}`} style={styles.chartColumn}>
                   <Text style={styles.chartValue}>{item.kWh}</Text>
                   <View style={styles.barTrack}>
-                    <View style={[styles.barFill, { height }]} />
+                    <View
+                      style={[
+                        styles.barFill,
+                        { height, backgroundColor: data.division.accentColor },
+                      ]}
+                    />
                   </View>
                   <Text style={styles.monthLabel}>{item.month}</Text>
                 </View>
@@ -216,12 +253,29 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 20,
   },
+  divisionInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  divisionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  divisionDot: {
+    width: 7,
+    height: 7,
+    marginRight: 6,
+    borderRadius: 4,
+  },
   topKicker: {
-    color: '#16849d',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.7,
@@ -231,6 +285,19 @@ const styles = StyleSheet.create({
     color: '#0a2347',
     fontSize: 23,
     fontWeight: '800',
+  },
+  divisionName: {
+    marginTop: 6,
+    color: '#365775',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  districtsSubtitle: {
+    maxWidth: '100%',
+    marginTop: 4,
+    color: '#71849a',
+    fontSize: 10,
+    lineHeight: 14,
   },
   logoutButton: {
     paddingHorizontal: 14,

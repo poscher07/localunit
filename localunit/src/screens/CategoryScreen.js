@@ -9,6 +9,8 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DivisionHeader from '../components/DivisionHeader';
+import { getEscomDivision } from '../data/escomDivisions';
 
 const categories = [
   {
@@ -23,14 +25,28 @@ const categories = [
   },
 ];
 
-export default function CategoryScreen({ navigation }) {
+export default function CategoryScreen({ navigation, route }) {
+  const divisionCode = route.params?.divisionCode;
+  const division = getEscomDivision(divisionCode);
   const [savingCategory, setSavingCategory] = useState(false);
 
+  const changeDivision = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'DivisionScreen' }],
+    });
+  };
+
   const selectCategory = async (category) => {
+    if (!division) {
+      Alert.alert('Choose a division', 'Select your Karnataka ESCOM division first.');
+      return;
+    }
+
     setSavingCategory(true);
     try {
-      await AsyncStorage.setItem('selectedCategory', category);
-      navigation.navigate('LoginScreen', { category });
+      await AsyncStorage.setItem(`selectedCategory:${division.code}`, category);
+      navigation.navigate('LoginScreen', { category, divisionCode: division.code });
     } catch (error) {
       Alert.alert(
         'Could not save category',
@@ -44,9 +60,19 @@ export default function CategoryScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content}>
+        <DivisionHeader
+          category="Select category"
+          division={division}
+          onChangeDivision={changeDivision}
+        />
         <View style={styles.eyebrow}>
-          <View style={styles.eyebrowDot} />
-          <Text style={styles.eyebrowText}>MESCOM ACCOUNT</Text>
+          <View
+            style={[
+              styles.eyebrowDot,
+              { backgroundColor: division?.accentColor || '#20becf' },
+            ]}
+          />
+          <Text style={styles.eyebrowText}>ESCOM ACCOUNT</Text>
         </View>
         <Text style={styles.title}>Choose your{'\n'}account type</Text>
         <Text style={styles.description}>
@@ -62,11 +88,24 @@ export default function CategoryScreen({ navigation }) {
               onPress={() => selectCategory(category.name)}
               style={({ pressed }) => [
                 styles.card,
+                division && { borderColor: `${division.accentColor}40` },
                 pressed && styles.cardPressed,
               ]}
             >
-              <View style={styles.cardIcon}>
-                <Text style={styles.cardIconText}>{category.icon}</Text>
+              <View
+                style={[
+                  styles.cardIcon,
+                  division && { backgroundColor: `${division.accentColor}18` },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.cardIconText,
+                    division && { color: division.accentColor },
+                  ]}
+                >
+                  {category.icon}
+                </Text>
               </View>
               <View style={styles.cardCopy}>
                 <Text style={styles.cardTitle}>{category.name}</Text>
