@@ -15,7 +15,7 @@ import { getEscomDivision } from '../data/escomDivisions';
 const categories = [
   {
     name: 'Domestic',
-    subtitle: 'Home and residential electricity',
+    subtitle: 'Home electricity · Track Gruha Jyothi’s 200-unit limit',
     icon: '⌂',
   },
   {

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,27 +13,33 @@ import {
 } from 'react-native';
 import PrimaryButton from '../components/PrimaryButton';
 import DivisionHeader from '../components/DivisionHeader';
-import { getAccountsForDivision } from '../data/accountStorage';
+import { CredentialContext } from '../context/CredentialContext';
 import { getEscomDivision } from '../data/escomDivisions';
+import { EscomApiError, fetchLiveBill } from '../data/escomApi';
 
-const errorMessage = (error) =>
-  error instanceof Error ? error.message : 'Please try again.';
+async function openPortal(url) {
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('Could not open portal', 'Check that a browser is available on this device.');
+  }
+}
 
 export default function LoginScreen({ navigation, route }) {
   const category = route.params?.category;
   const divisionCode = route.params?.divisionCode;
   const division = getEscomDivision(divisionCode);
+  const { setCredentials } = useContext(CredentialContext);
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState('');
 
-  const openDashboard = (accountId, ownerName) => {
-    navigation.replace('DashboardScreen', {
-      userId: accountId,
-      category,
-      divisionCode,
-      ownerName,
+  const changeDivision = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'DivisionScreen' }],
     });
   };
 
@@ -48,37 +54,40 @@ export default function LoginScreen({ navigation, route }) {
       return;
     }
 
+    const loginCredentials = {
+      escom: division.code,
+      category,
+      userId: normalizedUserId,
+      password,
+    };
+
     setIsLoggingIn(true);
+    setError('');
     try {
-      if (normalizedUserId === 'demo123' && password === '1234') {
-        openDashboard('demo123');
-        return;
-      }
-
-      const accounts = await getAccountsForDivision(division.code);
-
-      const account = accounts.find(
-        (savedAccount) =>
-          savedAccount.divisionCode === division.code &&
-          savedAccount.userId?.toLowerCase() === normalizedUserId.toLowerCase() &&
-          savedAccount.password === password,
-      );
-
-      if (!account) {
-        Alert.alert('Login failed', 'Check your User ID and password, then try again.');
-        return;
-      }
-      if (account.category && account.category !== category) {
+      const result = await fetchLiveBill(loginCredentials);
+      setCredentials({ ...loginCredentials, userId: normalizedUserId });
+      navigation.replace('DashboardScreen', { bill: result });
+    } catch (requestError) {
+      if (
+        requestError instanceof EscomApiError &&
+        requestError.status === 401 &&
+        requestError.code === 'UNREGISTERED_OR_INVALID'
+      ) {
         Alert.alert(
-          'Category mismatch',
-          `This account was registered as ${account.category}. Select that category to continue.`,
+          'Account not connected',
+          requestError.message,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Register in Chrome', onPress: () => void openPortal(division.registerUrl) },
+          ],
         );
         return;
       }
-
-      openDashboard(account.userId, account.fullName);
-    } catch (error) {
-      Alert.alert('Could not sign in', errorMessage(error));
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'The LocalUnit bill service could not be reached.',
+      );
     } finally {
       setIsLoggingIn(false);
     }
@@ -97,45 +106,38 @@ export default function LoginScreen({ navigation, route }) {
           <DivisionHeader
             category={category}
             division={division}
-            onChangeDivision={() =>
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'DivisionScreen' }],
-              })
-            }
+            onChangeDivision={changeDivision}
           />
-
           <View style={styles.heading}>
-            <Text style={styles.kicker}>WELCOME BACK</Text>
-            <Text style={styles.title}>Sign in to{'\n'}LocalUnit</Text>
+            <Text style={styles.kicker}>LIVE ESCOM CONNECTION</Text>
+            <Text style={styles.title}>Connect your{'\n'}electricity account</Text>
+            <Text style={styles.description}>
+              Your credentials are used for this request only and are not saved on this device.
+            </Text>
           </View>
 
           <View style={styles.form}>
-            <Text style={styles.label}>{division?.code || 'ESCOM'} User ID</Text>
+            <Text style={styles.label}>ESCOM User ID</Text>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
               onChangeText={setUserId}
-              placeholder="Enter your account ID"
+              placeholder="Enter your official portal User ID"
               placeholderTextColor="#9aabbd"
               style={styles.input}
               value={userId}
             />
-
             <View style={styles.passwordLabelRow}>
               <Text style={styles.label}>Password</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setShowPassword((visible) => !visible)}
-              >
-                <Text style={styles.showPassword}>{showPassword ? 'Hide' : 'Show'}</Text>
-              </Pressable>
+              <Text onPress={() => setShowPassword((visible) => !visible)} style={styles.showPassword}>
+                {showPassword ? 'Hide' : 'Show'}
+              </Text>
             </View>
             <TextInput
               autoCapitalize="none"
               onChangeText={setPassword}
               onSubmitEditing={handleLogin}
-              placeholder="Enter your password"
+              placeholder="Official portal password"
               placeholderTextColor="#9aabbd"
               returnKeyType="go"
               secureTextEntry={!showPassword}
@@ -143,32 +145,28 @@ export default function LoginScreen({ navigation, route }) {
               value={password}
             />
 
+            {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
             <PrimaryButton
-              label="Login"
+              label="Connect & Fetch Live Bill"
               loading={isLoggingIn}
               onPress={handleLogin}
               style={styles.loginButton}
             />
-
-            <Text style={styles.demoHint}>
-              Demo: User ID <Text style={styles.demoStrong}>demo123</Text>
-              {'  '}Password <Text style={styles.demoStrong}>1234</Text>
-            </Text>
+            {isLoggingIn ? (
+              <Text style={styles.loadingText}>
+                Authenticating with official {division?.code} server...
+              </Text>
+            ) : null}
           </View>
 
-          <View style={styles.registerRow}>
-            <Text style={styles.registerPrompt}>
-              No account created in {division?.code || 'ESCOM'} yet?
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() =>
-                navigation.navigate('RegisterScreen', { category, divisionCode })
-              }
-            >
-              <Text style={styles.registerLink}>Register here</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.registerPrompt}>
+            No {division?.code} Account Yet?
+          </Text>
+          <PrimaryButton
+            label="Register on Official Portal"
+            onPress={() => void openPortal(division?.registerUrl)}
+            style={styles.registerButton}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -190,8 +188,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   heading: {
-    marginTop: 20,
-    marginBottom: 28,
+    marginTop: 28,
+    marginBottom: 22,
   },
   kicker: {
     color: '#16849d',
@@ -202,9 +200,15 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 10,
     color: '#0a2347',
-    fontSize: 36,
+    fontSize: 33,
     fontWeight: '800',
-    lineHeight: 42,
+    lineHeight: 40,
+  },
+  description: {
+    marginTop: 10,
+    color: '#647a93',
+    fontSize: 13,
+    lineHeight: 19,
   },
   form: {
     padding: 20,
@@ -242,28 +246,30 @@ const styles = StyleSheet.create({
   loginButton: {
     marginTop: 2,
   },
-  demoHint: {
-    marginTop: 15,
-    color: '#71849a',
+  loadingText: {
+    marginTop: 12,
+    color: '#365775',
     fontSize: 12,
     textAlign: 'center',
   },
-  demoStrong: {
-    color: '#315b7d',
-    fontWeight: '700',
-  },
-  registerRow: {
-    alignItems: 'center',
-    marginTop: 24,
+  errorBanner: {
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#fff0ed',
+    color: '#a43e2d',
+    fontSize: 12,
+    lineHeight: 18,
   },
   registerPrompt: {
-    color: '#70849a',
+    marginTop: 24,
+    color: '#365775',
     fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
   },
-  registerLink: {
-    marginTop: 8,
-    color: '#087e9d',
-    fontSize: 14,
-    fontWeight: '800',
+  registerButton: {
+    marginTop: 10,
+    backgroundColor: '#147f9c',
   },
 });
