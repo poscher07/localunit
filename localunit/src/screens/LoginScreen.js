@@ -61,6 +61,17 @@ export default function LoginScreen({ navigation, route }) {
       password,
     };
 
+    const bridgeEscoms = ['MESCOM', 'HESCOM', 'GESCOM'];
+    if (bridgeEscoms.includes(division.code)) {
+      navigation.replace('PortalBridgeScreen', {
+        selectedEscom: division.code,
+        category,
+        userId: normalizedUserId,
+        password,
+      });
+      return;
+    }
+
     setIsLoggingIn(true);
     setError('');
     try {
@@ -81,6 +92,20 @@ export default function LoginScreen({ navigation, route }) {
             { text: 'Register in Chrome', onPress: () => void openPortal(division.registerUrl) },
           ],
         );
+        return;
+      }
+      if (
+        requestError instanceof EscomApiError &&
+        requestError.status === 503 &&
+        requestError.code === 'CAPTCHA_REQUIRED' &&
+        bridgeEscoms.includes(division.code)
+      ) {
+        navigation.replace('PortalBridgeScreen', {
+          selectedEscom: division.code,
+          category,
+          userId: normalizedUserId,
+          password,
+        });
         return;
       }
       setError(

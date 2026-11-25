@@ -59,6 +59,10 @@ function isVerificationChallenge(text) {
   return /captcha|recaptcha|hcaptcha|verify you are human|one[\s-]?time password|\bOTP\b/i.test(text);
 }
 
+function isCaptchaChallenge(text) {
+  return /captcha|recaptcha|hcaptcha|verify you are human/i.test(text);
+}
+
 function normalizeLabel(value) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -198,7 +202,10 @@ async function loginAndReadBill(page, escom, category, userId, password) {
   const captchaFields = page.locator(
     'input[id*="captcha" i], input[name*="captcha" i], input[placeholder*="captcha" i], img[src*="captcha" i]',
   );
-  if ((await captchaFields.count()) > 0 || isVerificationChallenge(pageText)) {
+  if ((await captchaFields.count()) > 0 || isCaptchaChallenge(pageText)) {
+    throw new PortalError('CAPTCHA_REQUIRED');
+  }
+  if (isVerificationChallenge(pageText)) {
     throw new PortalError('PORTAL_UNAVAILABLE');
   }
 
@@ -234,6 +241,9 @@ async function loginAndReadBill(page, escom, category, userId, password) {
     throw new PortalError('PORTAL_UNAVAILABLE');
   }
   pageText = await page.locator('body').innerText();
+  if (isCaptchaChallenge(pageText)) {
+    throw new PortalError('CAPTCHA_REQUIRED');
+  }
   if (isVerificationChallenge(pageText)) {
     throw new PortalError('PORTAL_UNAVAILABLE');
   }

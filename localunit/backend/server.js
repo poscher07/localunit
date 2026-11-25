@@ -57,6 +57,12 @@ app.post('/api/fetch-bill', fetchBillLimiter, async (request, response) => {
         message: 'Account not found or invalid password on official ESCOM portal.',
       });
     }
+    if (error instanceof PortalError && error.code === 'CAPTCHA_REQUIRED') {
+      return response.status(503).json({
+        code: 'CAPTCHA_REQUIRED',
+        message: 'Complete the CAPTCHA in the official ESCOM portal to sync your bill.',
+      });
+    }
 
     process.stderr.write(
       `Bill fetch unavailable: ${error instanceof PortalError ? error.code : 'unexpected_error'}\n`,

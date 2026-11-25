@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: localunit-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npx playwright install chromium
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: "10000"

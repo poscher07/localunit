@@ -7,6 +7,7 @@ import DivisionScreen from './src/screens/DivisionScreen';
 import CategoryScreen from './src/screens/CategoryScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
+import PortalBridgeScreen from './src/screens/PortalBridgeScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -27,6 +28,7 @@ export default function App() {
           <Stack.Screen name="DivisionScreen" component={DivisionScreen} />
           <Stack.Screen name="CategoryScreen" component={CategoryScreen} />
           <Stack.Screen name="LoginScreen" component={LoginScreen} />
+          <Stack.Screen name="PortalBridgeScreen" component={PortalBridgeScreen} />
           <Stack.Screen name="DashboardScreen" component={DashboardScreen} />
         </Stack.Navigator>
       </NavigationContainer>
